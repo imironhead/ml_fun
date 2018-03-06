@@ -39,37 +39,24 @@ def circular_pad(tensors):
 
 def generate_mini_batch(size, height, width, threshold=0.5):
     """
+    generate a batch of data. the source tensors are padded (we build a model
+    with padded source tensors input)
     """
     # NOTE: pad source for vertical and horizontal cycles
-    source_tensors = np.random.rand(size, height + 2, width + 2)
-    target_tensors = np.zeros((size, height, width), dtype=np.float)
+    source_tensors = np.random.rand(size, height, width, 1)
+    target_tensors = np.zeros((size, height, width, 1), dtype=np.float)
 
     # NOTE: transfer source_tensors into binary matrics
     source_tensors[source_tensors >= threshold] = 1.0
     source_tensors[source_tensors < threshold] = 0.0
 
-    # NOTE: vertical cycle
-    source_tensors[:, 0, :] = source_tensors[:, -2, :]
-    source_tensors[:, -1, :] = source_tensors[:, 1, :]
-
-    # NOTE: horizontal cycle
-    source_tensors[:, :, 0] = source_tensors[:, :, -2]
-    source_tensors[:, :, -1] = source_tensors[:, :, 1]
-
-    # NOTE: 4 corners
-    source_tensors[:, 0, 0] = source_tensors[:, -2, -2]
-    source_tensors[:, -1, 0] = source_tensors[:, 1, -2]
-
-    source_tensors[:, 0, -1] = source_tensors[:, -2, 1]
-    source_tensors[:, -1, -1] = source_tensors[:, 1, 1]
+    # NOTE: pad for the model
+    source_tensors = circular_pad(source_tensors)
 
     # NOTE: live goes on
     for i in range(size):
-        target_tensors[i] = life.life_goes_on(source_tensors[i, 1:-1, 1:-1])
-
-    # NOTE: reshape for cnn
-    source_tensors = np.expand_dims(source_tensors, axis=3)
-    target_tensors = np.expand_dims(target_tensors, axis=3)
+        target_tensors[i, :, :, 0] = \
+            life.life_goes_on(source_tensors[i, 1:-1, 1:-1, 0])
 
     return source_tensors, target_tensors
 
@@ -98,6 +85,8 @@ def train_one_step(session, life_model):
 
 def validate(session, life_model):
     """
+    use accuracy to measure the performace.
+    we call a result correct only if each cell is matched.
     """
     num_samples = 0
     num_correct = 0
@@ -123,8 +112,8 @@ def validate(session, life_model):
         guess[guess > 0.5] = 1.0
         guess[guess < 1.0] = 0.0
 
-        num_correct += np.sum(np.sum(truth == guess, axis=1).astype(np.int) == 1024)
-
+        num_correct_cells = np.sum(truth == guess, axis=1).astype(np.int)
+        num_correct += np.sum(num_correct_cells == 1024)
 
     return float(num_correct) / float(num_samples)
 
@@ -135,7 +124,10 @@ def train():
     # NOTE: a simple model, skip loading checkpoint
     # NOTE: a simple model, skip summary
 
-    life_model = model.build_model(32)
+    # NOTE: train on specific size, but the learned weights can be applied on
+    #       different size of worlds since the update rules are all about
+    #       local neighbors
+    life_model = model.build_model(32, 32)
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
@@ -157,6 +149,14 @@ def train():
 
 def read_world_tensors(path):
     """
+    make a world matrix base on a text description file at path.
+    the file are composed with 3 characters: o, \n, anything else.
+    e.g.
+
+    ......
+    ..oo..
+    ..oo..
+    ......
     """
     if path is None or not os.path.isfile(path):
         raise Exception('invalid path: {}'.format(path))
@@ -168,6 +168,7 @@ def read_world_tensors(path):
 
     lengths = [len(line) for line in world]
 
+    # NOTE: the world must be a rectangle
     if len(lengths) == 0 or any([l != lengths[0] for l in lengths]):
         raise Exception('invalid file')
 
@@ -182,33 +183,45 @@ def read_world_tensors(path):
 def predict():
     """
     """
+    # NOTE: load a world from the description file
     world_tensors = read_world_tensors(FLAGS.world_path)
 
-    h, w = world_tensors.shape[1:3]
+    # NOTE: size of the input of the trained model
+    world_height, world_width = world_tensors.shape[1:3]
 
-    life_model = model.build_model(h)
+    # NOTE: size of the output images
+    scaled_shape = [
+        FLAGS.scale_factor * world_height, FLAGS.scale_factor * world_width]
+
+    # NOTE: build the model
+    life_model = model.build_model(world_height, world_width)
 
     with tf.Session() as session:
+        # NOTE: restore the mode weights
+        #       the weights should be restored base on their names
+        #       so we just build a duplicated model and overwrite the weights
         tf.train.Saver().restore(session, FLAGS.ckpt_path)
 
         for step in range(FLAGS.predict_length):
+            # NOTE: pad the input image circularly
             world_tensors = circular_pad(world_tensors)
 
+            # NOTE: do the prediction
             feeds = {life_model['source_tensors']: world_tensors}
 
             world_tensors = session.run(
                 life_model['predictions'], feed_dict=feeds)
 
-            # NOTE: save
+            # NOTE: save a scaled version
             output_image_path = os.path.join(
                 FLAGS.output_path, '{:0>8}.png'.format(step))
 
             scaled_image = skimage.transform.resize(
-                world_tensors[0, :, :, 0], [32 * h, 32 * w], order=0)
+                world_tensors[0, :, :, 0], scaled_shape, order=0)
 
             skimage.io.imsave(output_image_path, scaled_image)
 
-            # NOTE: save 2nd
+            # NOTE: prepare next step
             world_tensors[world_tensors > 0.5] = 1.0
             world_tensors[world_tensors < 1.0] = 0.0
 
@@ -223,13 +236,19 @@ def main(_):
 
 
 if __name__ == '__main__':
-    tf.app.flags.DEFINE_string('ckpt_path', None, '')
-    tf.app.flags.DEFINE_string('meta_path', None, '')
-    tf.app.flags.DEFINE_string('world_path', None, '')
-    tf.app.flags.DEFINE_string('output_path', None, '')
+    tf.app.flags.DEFINE_string(
+        'ckpt_path', None, 'path to save/load a checkpoint')
+    tf.app.flags.DEFINE_string(
+        'world_path', None, 'path to load a world description for prediction')
+    tf.app.flags.DEFINE_string(
+        'output_path', None, 'path to a dir to keep predictions')
 
-    tf.app.flags.DEFINE_boolean('predict', False, '')
-    tf.app.flags.DEFINE_integer('predict_length', 128, '')
+    tf.app.flags.DEFINE_boolean(
+        'predict', False, 'predicting base on ckpt & world')
+    tf.app.flags.DEFINE_integer(
+        'predict_length', 128, 'number of successive predictions')
+    tf.app.flags.DEFINE_integer(
+        'scale_factor', 80, 'scale factor for the prediction result images')
 
     tf.app.run()
 

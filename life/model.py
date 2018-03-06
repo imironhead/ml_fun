@@ -3,25 +3,25 @@
 import tensorflow as tf
 
 
-def build_model(world_size):
+def build_model(world_height, world_width):
     """
     """
     # NOTE: world at T, should be padded circularly.
     source_tensors = tf.placeholder(
-        shape=[None, world_size + 2, world_size + 2, 1],
+        shape=[None, world_height + 2, world_width + 2, 1],
         dtype=tf.float32,
         name='source_tensors')
 
     # NOTE: world at T+1.
     target_tensors = tf.placeholder(
-        shape=[None, world_size, world_size, 1],
+        shape=[None, world_height, world_width, 1],
         dtype=tf.float32,
         name='target_tensors')
 
     # NOTE: kernel initializer
     initializer = tf.truncated_normal_initializer(stddev=0.02)
 
-    # NOTE: valid padding to down-size toshape of  target_tensors
+    # NOTE: valid padding to down-size to shape of  target_tensors
     tensors = tf.layers.conv2d(
         source_tensors,
         filters=4,
