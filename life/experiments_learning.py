@@ -7,7 +7,7 @@ import skimage.transform
 import tensorflow as tf
 
 import life
-import model
+import model_learning
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -127,7 +127,7 @@ def train():
     # NOTE: train on specific size, but the learned weights can be applied on
     #       different size of worlds since the update rules are all about
     #       local neighbors
-    life_model = model.build_model(32, 32)
+    life_model = model_learning.build_model(32, 32)
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
@@ -194,7 +194,7 @@ def predict():
         FLAGS.scale_factor * world_height, FLAGS.scale_factor * world_width]
 
     # NOTE: build the model
-    life_model = model.build_model(world_height, world_width)
+    life_model = model_learning.build_model(world_height, world_width)
 
     with tf.Session() as session:
         # NOTE: restore the mode weights
