@@ -8,6 +8,14 @@ This is a definite **useless** predictor. But with literally infinite training d
 
 ## Experimented Model
 
+### Handcrafted :D
+
+```
+weights: [[1.0, 1.0, 1.0], [1.0, 0.5, 1.0], [1.0, 1.0, 1.0]]
+bias: -3.0
+activation: exp
+```
+
 ### Smallest One:
 
 ```
