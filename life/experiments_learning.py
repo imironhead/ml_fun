@@ -127,7 +127,7 @@ def train():
     # NOTE: train on specific size, but the learned weights can be applied on
     #       different size of worlds since the update rules are all about
     #       local neighbors
-    life_model = model_learning.build_model(32, 32)
+    life_model = model_learning.build_model(32, 32, FLAGS.model)
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
@@ -194,7 +194,8 @@ def predict():
         FLAGS.scale_factor * world_height, FLAGS.scale_factor * world_width]
 
     # NOTE: build the model
-    life_model = model_learning.build_model(world_height, world_width)
+    life_model = \
+        model_learning.build_model(world_height, world_width, FLAGS.model)
 
     with tf.Session() as session:
         # NOTE: restore the mode weights
@@ -236,6 +237,8 @@ def main(_):
 
 
 if __name__ == '__main__':
+    tf.app.flags.DEFINE_string(
+        'model', 'cnn', 'basic model type for experiment')
     tf.app.flags.DEFINE_string(
         'ckpt_path', None, 'path to save/load a checkpoint')
     tf.app.flags.DEFINE_string(
