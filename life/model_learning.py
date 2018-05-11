@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 
-def exp(tensors):
+def gaussian(tensors):
     """
     """
     return tf.exp(- tf.square(tensors))
@@ -35,7 +35,7 @@ def build_gaussian_model(world_height, world_width):
         filters=1,
         kernel_size=3,
         padding='valid',
-        activation=exp,
+        activation=gaussian,
         use_bias=True,
         kernel_initializer=initializer)
 
@@ -56,7 +56,7 @@ def build_gaussian_model(world_height, world_width):
        .AdamOptimizer(learning_rate=0.01) \
        .minimize(loss, global_step=step)
 
-    return {
+    model = {
         'source_tensors': source_tensors,
         'target_tensors': target_tensors,
         'predictions': predictions,
@@ -65,10 +65,18 @@ def build_gaussian_model(world_height, world_width):
         'trainer': trainer,
     }
 
+    for var in tf.global_variables():
+        if var.name.endswith('kernel:0') or var.name.endswith('bias:0'):
+            model['var_' + var.name[:-2]] = var
+
+    return model
+
 
 def build_cnn_model(world_height, world_width):
     """
     """
+    print('building model: cnn')
+
     # NOTE: world at T, should be padded circularly.
     source_tensors = tf.placeholder(
         shape=[None, world_height + 2, world_width + 2, 1],
@@ -92,10 +100,11 @@ def build_cnn_model(world_height, world_width):
         padding='valid',
         activation=tf.nn.relu,
         use_bias=True,
-        kernel_initializer=initializer)
+        kernel_initializer=initializer,
+        name='conv2d_0')
 
     # NOTE: conv net chain
-    for _ in range(2):
+    for i in range(2):
         tensors = tf.layers.conv2d(
             tensors,
             filters=4,
@@ -103,7 +112,8 @@ def build_cnn_model(world_height, world_width):
             padding='same',
             activation=tf.nn.relu,
             use_bias=True,
-            kernel_initializer=initializer)
+            kernel_initializer=initializer,
+            name='conv2d_{}'.format(i + 1))
 
     # NOTE: map to target layer
     tensors = tf.layers.conv2d(
@@ -113,7 +123,8 @@ def build_cnn_model(world_height, world_width):
         padding='same',
         activation=None,
         use_bias=False,
-        kernel_initializer=initializer)
+        kernel_initializer=initializer,
+        name='conv2d_3')
 
     # NOTE: to probabilities
     predictions = tf.nn.sigmoid(tensors, name='predictions')
@@ -132,7 +143,7 @@ def build_cnn_model(world_height, world_width):
        .AdamOptimizer(learning_rate=0.001) \
        .minimize(loss, global_step=step)
 
-    return {
+    model = {
         'source_tensors': source_tensors,
         'target_tensors': target_tensors,
         'predictions': predictions,
@@ -140,6 +151,12 @@ def build_cnn_model(world_height, world_width):
         'step': step,
         'trainer': trainer,
     }
+
+    for var in tf.global_variables():
+        if var.name.endswith('kernel:0') or var.name.endswith('bias:0'):
+            model['var_' + var.name[:-2]] = var
+
+    return model
 
 
 def build_model(world_height, world_width, name='cnn'):

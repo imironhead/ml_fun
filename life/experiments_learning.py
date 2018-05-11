@@ -118,6 +118,18 @@ def validate(session, life_model):
     return float(num_correct) / float(num_samples)
 
 
+def print_weights(session, life_model):
+    """
+    """
+    for k, v in life_model.items():
+        if not k.startswith('var_'):
+            continue
+
+        print(k)
+        print(v.eval(session))
+        print('-' * 80)
+
+
 def train():
     """
     """
@@ -143,8 +155,12 @@ def train():
 
                 print('accu[{:>8}]: {}'.format(step, accuracy))
 
-        tf.train.Saver().save(
-            session, FLAGS.ckpt_path, global_step=life_model['step'])
+        if not FLAGS.ckpt_path is None:
+            tf.train.Saver().save(
+                session, FLAGS.ckpt_path, global_step=life_model['step'])
+
+        # NOTE: print weights
+        print_weights(session, life_model)
 
 
 def read_world_tensors(path):
