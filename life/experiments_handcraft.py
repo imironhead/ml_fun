@@ -56,14 +56,14 @@ def generate_mini_batch(size, height, width, threshold=0.5):
     return source_tensors, target_tensors
 
 
-def trial(num_trials):
+def trial(model_name, num_trials):
     """
     """
     num_samples = 0
     num_correct = 0
 
     # NOTE: build the handcrafted model
-    model = model_handcraft.build_model(32, 32)
+    model = model_handcraft.build_model(32, 32, name=model_name)
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
@@ -89,16 +89,20 @@ def trial(num_trials):
             num_correct_cells = np.sum(truth == guess, axis=1).astype(np.int)
             num_correct += np.sum(num_correct_cells == 1024)
 
-        print('accuracy: {}'.format(float(num_correct) / float(num_samples)))
+    accuracy = float(num_correct) / float(num_samples)
+
+    print('{} accuracy: {}'.format(model_name, accuracy))
 
 
 def main(_):
     """
     """
-    trial(tf.app.flags.FLAGS.num_trials)
+    trial(tf.app.flags.FLAGS.model, tf.app.flags.FLAGS.num_trials)
 
 
 if __name__ == '__main__':
+    tf.app.flags.DEFINE_string(
+        'model', 'gaussian', 'basic model type for experiment')
     tf.app.flags.DEFINE_integer(
         'num_trials', 128, 'number of prediction trials')
 
